@@ -1,11 +1,12 @@
 import '../config.dart';
 
-class Set {
-  final TextEditingController kgsController;
+class SetData {
+  final TextEditingController kgController;
   final TextEditingController repsController;
 
-  Set({required this.kgsController, required this.repsController});
+  SetData({required this.kgController, required this.repsController});
 }
+
 
 class Data {
   String? id;
@@ -61,7 +62,7 @@ class Data {
   List<MainMuscles>? mainMuscles;
   List<SecondaryMuscles>? secondaryMuscles;
   List<Categories>? categories;
-   List<Set>? sets;
+   List<SetData>? sets;
 
   Data(
       {this.id,
@@ -192,7 +193,7 @@ class Data {
       });
     }
     if(json['sets'] != null){
-      sets = <Set>[];
+      sets = <SetData>[];
       json['sets'].forEach((v) {
         sets!.add(v);
       });
@@ -632,5 +633,34 @@ class ExerciseExerciseCategories {
     data['createdAt'] = createdAt;
     data['updatedAt'] = updatedAt;
     return data;
+  }
+}
+
+
+class AddNewExercise {
+  String? title;
+  List<Data>? data;
+
+  AddNewExercise(
+      {this.title,
+        this.data});
+
+  AddNewExercise.fromJson(Map<String, dynamic> json) {
+    title = json['title'];
+    if (json['data'] != null) {
+      data = <Data>[];
+      json['data'].forEach((v) {
+        data!.add(Data.fromJson(v));
+      });
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = <String, dynamic>{};
+    json['title'] = title;
+    if (json['data'] != null) {
+      json['data'] = data!.map((v) => v.toJson()).toList();
+    }
+    return json;
   }
 }

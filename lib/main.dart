@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:monkeybox_dhruvi/config.dart';
+import 'package:monkeybox_dhruvi/providers/add_exercise_provider.dart';
 import 'package:monkeybox_dhruvi/providers/home_provider.dart';
 import 'package:monkeybox_dhruvi/routes/index.dart';
 import 'package:monkeybox_dhruvi/screens/home/home.dart';
@@ -29,6 +30,8 @@ class MyApp extends StatelessWidget {
                       create: (_) => ThemeService(snapData.data!,context)),
                   ChangeNotifierProvider(
                       create: (_) => HomeProvider()),
+                  ChangeNotifierProvider(
+                      create: (_) => AddExerciseProvider()),
                 ],
                 child: Consumer<ThemeService>(builder: (context, theme, child) {
 

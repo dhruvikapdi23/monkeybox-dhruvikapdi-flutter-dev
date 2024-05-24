@@ -6,7 +6,8 @@ import 'package:provider/provider.dart';
 import '../../config.dart';
 
 class AddExerciseDialog extends StatelessWidget {
-  const AddExerciseDialog({super.key});
+  final int? index;
+  const AddExerciseDialog({super.key,  this.index});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +54,7 @@ class AddExerciseDialog extends StatelessWidget {
             CupertinoDialogAction(
                 isDestructiveAction: true,
                 onPressed: () {
-                  home.showModalSheet(context);
+                  home.showModalSheet(context,index: index);
                 },
                 child: Text(
                   appFonts.save,

@@ -9,23 +9,26 @@ import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:monkeybox_dhruvi/common/extension/text_style_extensions.dart';
 import 'package:monkeybox_dhruvi/common/extension/widget_extension.dart';
 import 'package:monkeybox_dhruvi/model/exercise_model.dart';
+import 'package:monkeybox_dhruvi/providers/add_exercise_provider.dart';
 import 'package:monkeybox_dhruvi/screens/home/add_exercise_dialog.dart';
+import 'package:monkeybox_dhruvi/screens/home/edit_exercise.dart';
 import 'package:monkeybox_dhruvi/screens/home/equipment_muscles.dart';
 import 'package:monkeybox_dhruvi/screens/home/exercise_list_dialog.dart';
 import 'package:monkeybox_dhruvi/screens/home/filter_muscles.dart';
 import 'package:monkeybox_dhruvi/widgets/button_common.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 
 class HomeProvider extends ChangeNotifier {
   List exerciseList = [];
   List<Data> newAddList = [];
-  List saveDataList = [];final List<Exercise> sets = [];
+  List<AddNewExercise> addedList = [];
 
-  List<TextEditingController> controllersList = [];
+  List saveDataList = [];
+  final List<TextEditingController> controllersList = [];
   List<Row> textFieldRows = [];
-
 
   List<Data> exerciseModelList = [];
   List<Data> searchList = [];
@@ -35,7 +38,7 @@ class HomeProvider extends ChangeNotifier {
   TextEditingController controller = TextEditingController();
   TextEditingController search = TextEditingController();
 
-  onInit() {
+  onInit()async {
     rootBundle.loadString('asset/exercise.json').then((value) {
       dynamic data = json.decode(value);
       List list = data['entity']['data'];
@@ -60,16 +63,42 @@ class HomeProvider extends ChangeNotifier {
       notifyListeners();
     });
     log("EXPER :${muscleGroup.length}");
+SharedPreferences preferences = await SharedPreferences.getInstance();
+    final rawJson = preferences.getString("exerciseList");
+
+    debugPrint("rawJson : $rawJson");
+    if (rawJson != null) {
+      List<dynamic> listMap = jsonDecode(rawJson);
+      debugPrint("map : $listMap");
+      addedList = listMap.map((e) {
+        log(" json.decode(e)['isPackage']:${json.decode(e)}");
+        AddNewExercise data =  json.decode(e);
+
+        return data;
+      }).toList();
+    }
+    notifyListeners();
   }
 
-  addExericeDialog(context) {
+  totalExercise(context,index) {
+
+    return addedList[index].data!.fold(0, (previousValue, element) => element.sets!.fold(0, (i, j) => int.parse(j.kgController.text) + int.parse(j.kgController.text.toString())));
+  }
+
+  totalSet(context) {
+
+    return newAddList
+        .fold(0, (i, j) => i + (j.sets == null ? 0 : j.sets!.length));
+  }
+
+  addExericeDialog(context,{index}) {
     showCupertinoModalPopup<void>(
         context: context,
         builder: (BuildContext context) =>
-            Theme(data: ThemeData.dark(), child: const AddExerciseDialog()));
+            Theme(data: ThemeData.dark(), child:  AddExerciseDialog(index: index,)));
   }
 
-  showModalSheet(context) {
+  showModalSheet(context,{index}) {
     showMaterialModalBottomSheet(
       context: context,
       builder: (context) => Material(
@@ -115,7 +144,7 @@ class HomeProvider extends ChangeNotifier {
               const VSpace(Sizes.s40),
               ButtonCommon(
                 onTap: () {
-                  showExerciseModalSheet(context);
+                  showExerciseModalSheet(context,index: index);
                 },
                 title: appFonts.addExercise,
                 color: const Color(0xFF0E0E14),
@@ -162,61 +191,101 @@ class HomeProvider extends ChangeNotifier {
         });
   }
 
-
-  showExerciseModalSheet(context) {
+  showExerciseModalSheet(context,{index}) {
     showMaterialModalBottomSheet(
       context: context,
       builder: (context) => Material(
           child: Scaffold(
-            body: CupertinoPageScaffold(
-                    backgroundColor: const Color(0xFFFFFFFF),
-                    navigationBar: CupertinoNavigationBar(
+        body: CupertinoPageScaffold(
+          backgroundColor: const Color(0xFFFFFFFF),
+          navigationBar: CupertinoNavigationBar(
             backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
             middle: Text(appFonts.library,
                 style: appCss.dmSansSemiBold18
                     .textColor(appColor(context).darkText)),
             leading:
-                Text(appFonts.cancel).inkWell(onTap: () => route.pop(context)),
-            trailing:
-                Text(appFonts.add).inkWell(onTap: () => addDetailSheet(context)),
-                    ),
-                    child: const ExerciseListDialog(),
-                  ),
-          )),
+                Text(appFonts.cancel).inkWell(onTap: () {
+                  controller.text ="";
+                  notifyListeners();
+                  route.pop(context);
+                }),
+            trailing: Text(appFonts.add)
+                .inkWell(onTap: () => addDetailSheet(context,index: index)),
+          ),
+          child: const ExerciseListDialog(),
+        ),
+      )),
     );
   }
 
-  addDetailSheet(context) {
+  addDetailSheet(context,{index}) {
 /*    controllersList = [];
     textFieldRows = [];
     notifyListeners();
     addNewTextFieldPair(context);*/
     showMaterialModalBottomSheet(
       context: context,
-      builder: (context) => Material(
-          child: Scaffold(
-            body:
-            Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                ListView(
-                  children: newAddList.asMap().entries.map((e) => ExerciseCard( exercise: e.value, onDelete: () {  },)).toList(),
-                ),
+      builder: (context) =>
+          Consumer<AddExerciseProvider>(builder: (context, exe, child) {
+            log("EDIT ::$newAddList");
+        return StatefulBuilder(builder: (context, setstate) {
+          return Material(
+              child: Scaffold(
+            appBar: AppBar(
+              actions: [
+                Text(
+                  "Save",
+                  style: appCss.dmSansSemiBold14
+                      .textColor(appColor(context).darkText),
+                ).paddingSymmetric(horizontal: Sizes.s20).inkWell(onTap: (){
+                  final add = Provider.of<AddExerciseProvider>(context,listen: false);
+                  add.saveExercise(context);
+                  route.pop(context);
+                  route.pop(context);
+                  route.pop(context);
+                  route.pop(context);
 
+
+                })
               ],
             ),
+            body: ListView(
+              children: [
+                Text(
+                  "${newAddList.length} exercises, ${totalSet(context)} sets",
+                  style: appCss.dmSansMedium16
+                      .textColor(appColor(context).darkText),
+                ).paddingSymmetric(horizontal: Sizes.s20),
+                const VSpace(Sizes.s20),
 
-          )),
+
+                Column(
+                  children: [
+                    ...newAddList.asMap().entries.map((e) => ExerciseCard(
+                      exercise: e.value,
+
+                      onAddSet: (p0) {
+                        newAddList[e.key].sets!.add(p0);
+                        notifyListeners();
+                      },
+                      index: e.key,
+                      onDelete: () {},
+                      onEdit: () {},
+                    ))
+                  ],
+                )
+              ],
+            ),
+          ));
+        });
+      }),
     );
   }
 
   void saveData(context) {
-    final home = Provider.of<HomeProvider>(context,listen: false);
-
+    final home = Provider.of<HomeProvider>(context, listen: false);
 
     log("CONTE L:$controllersList");
-
-
   }
 
   Widget bottomAppBar(BuildContext context) {
@@ -254,254 +323,98 @@ class HomeProvider extends ChangeNotifier {
   }
 }
 
-
-class Exercise {
-  final Data data;
-  final List<Set> sets;
-
-  Exercise({required this.data, required this.sets});
-}
-
-
 class ExerciseCard extends StatefulWidget {
   final Data exercise;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final Function(SetData) onAddSet;
+  final int? index;
 
-  ExerciseCard({required this.exercise, required this.onDelete});
+  ExerciseCard(
+      {required this.exercise,
+      required this.onDelete,
+      required this.onEdit,
+      this.index,
+      required this.onAddSet});
 
   @override
   State<ExerciseCard> createState() => _ExerciseCardState();
 }
 
 class _ExerciseCardState extends State<ExerciseCard> {
-
-
-   _saveExercise(context) {
-     final home = Provider.of<HomeProvider>(context,listen: false);
-    final exercise = Exercise(
-      data: widget.exercise,
-      sets: widget.exercise.sets!,
-    );
-
-     home.sets.add(exercise);
-    setState(() {
-
-    });
-  }
-
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Consumer<HomeProvider>(
-      builder: (context,home,child) {
-        return Card(
-          margin: EdgeInsets.all(8.0),
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.exercise.name!,
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-
-                      ],
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete),
-                      onPressed: widget.onDelete,
-                    ),
-
-                  ],
-                ),
-                if(widget.exercise.sets != null)
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  itemCount: widget.exercise.sets!.length,
-                  itemBuilder: (context, index) {
-                    final set = widget.exercise.sets![index];
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TextField(
-                              controller: set.kgsController,
-                              decoration: InputDecoration(
-                                contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                                suffixIcon: Text("Kgs").paddingSymmetric(vertical: 15),
-                                enabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                disabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                focusedBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                border: OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                labelText: 'Enter text',
-
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TextField(
-                              controller: set.repsController,
-                              decoration: InputDecoration(
-                                contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                                suffixIcon: Text("Kgs").paddingSymmetric(vertical: 15),
-                                enabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                disabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                focusedBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                                border: OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-
-                                labelText: 'reps',
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.remove_circle),
-                          onPressed: () {
-                            widget.exercise.sets!.removeAt(index);
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                TextButton(
-                  onPressed: () {
-                    final set = Set(
-                      kgsController: TextEditingController(),
-                      repsController: TextEditingController(),
-                    );
-                    if(widget.exercise.sets != null) {
-                      widget.exercise.sets!.add(set);
-                    }else{
-                      widget.exercise.sets = [set];
-                    }
-                    setState(() {
-
-                    });
-                  },
-                  child: Text('Add set'),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    );
-  }
-}
-
-/*
-class AddExercisePage extends StatefulWidget {
-  @override
-  _AddExercisePageState createState() => _AddExercisePageState();
-}
-
-class _AddExercisePageState extends State<AddExercisePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _typeController = TextEditingController();
-  final List<Set> _sets = [];
-
   @override
   void initState() {
+    // TODO: implement initState
+    final add = Provider.of<AddExerciseProvider>(context, listen: false);
+    add.exercise = widget.exercise;
+
+    widget.exercise.sets =  widget.exercise.sets ?? [SetData(kgController: TextEditingController(), repsController: TextEditingController())];;
+    add.exercise!.sets = widget.exercise.sets ?? [
+      SetData(
+          kgController: TextEditingController(),
+          repsController: TextEditingController())
+    ];
+    add.notifyListeners();
+    setState(() {});
     super.initState();
-    _addNewSet();
-  }
-
-  void _addNewSet({String? kgs, String? reps}) {
-    final set = Set(
-      kgsController: TextEditingController(text: kgs),
-      repsController: TextEditingController(text: reps),
-    );
-
-    setState(() {
-      _sets.add(set);
-    });
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _typeController.dispose();
-    _sets.forEach((set) {
-      set.kgsController.dispose();
-      set.repsController.dispose();
-    });
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('New Exercise'),
-        actions: [
-          TextButton(
-            onPressed: _saveExercise,
-            child: Text(
-              'Save',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
+    return Consumer2<HomeProvider, AddExerciseProvider>(
+        builder: (context, home, add, child) {
+      return Card(
+        margin: EdgeInsets.all(8.0),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(16.0),
           child: Column(
             children: [
-              TextButton(
-                onPressed: _saveExercise,
-                child: Text(
-                  'Save',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Exercise Name',
-                ),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: _typeController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Type',
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.exercise.name!,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.edit),
+                        onPressed: widget.onEdit,
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete),
+                        onPressed: widget.onDelete,
+                      ),
+                    ],
+                  ),
+                ],
               ),
               ListView.builder(
                 shrinkWrap: true,
                 physics: NeverScrollableScrollPhysics(),
-                itemCount: _sets.length,
+                itemCount: widget.exercise.sets!.length,
                 itemBuilder: (context, index) {
-                  final set = _sets[index];
+                  final set = widget.exercise.sets![index];
                   return Row(
                     children: [
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: TextField(
-                            controller: set.kgsController,
+                            controller: set.kgController,
                             decoration: InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'kg',
-                            ),
+                                enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: appColor(context).darkText)),
+                                border: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: appColor(context).darkText)),
+                                suffixIcon: Text(
+                                  'Kg',
+                                  style: appCss.dmSansLight12
+                                      .textColor(appColor(context).darkText),
+                                ).paddingSymmetric(vertical: Sizes.s20)),
                             keyboardType: TextInputType.number,
                           ),
                         ),
@@ -512,233 +425,50 @@ class _AddExercisePageState extends State<AddExercisePage> {
                           child: TextField(
                             controller: set.repsController,
                             decoration: InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'reps',
-                            ),
+                                enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: appColor(context).darkText)),
+                                border: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                        color: appColor(context).darkText)),
+                                suffixIcon: Text(
+                                  'reps',
+                                  style: appCss.dmSansLight12
+                                      .textColor(appColor(context).darkText),
+                                ).paddingSymmetric(vertical: Sizes.s20)),
                             keyboardType: TextInputType.number,
                           ),
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.remove_circle),
-                        onPressed: () {
-                          setState(() {
-                            _sets.removeAt(index);
-                          });
-                        },
-                      ),
+                      Icon(Icons.remove_circle).inkWell(onTap: () {
+                        /* widget.onAddSet(index);
+                            widget.exercise.sets!.removeAt(index);
+                            home.newAddList[widget.index!]!.sets!.removeAt(index);
+                            home.notifyListeners();*/
+                        /*          add.exercise!.sets!.removeAt(index);
+                            add.notifyListeners();*/
+                        setState(() {});
+                      })
                     ],
                   );
                 },
               ),
               TextButton(
-                onPressed: _addNewSet,
-                child: Text('Add set'),
+                onPressed: () {
+                  final newSet = SetData(
+                    kgController: TextEditingController(),
+                    repsController: TextEditingController(),
+                  );
+                  widget.onAddSet(newSet);
+
+                  setState(() {});
+                },
+                child: Text('Add Set'),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-*/
-
-class DynamicTextFields extends StatefulWidget {
-  @override
-  _DynamicTextFieldsState createState() => _DynamicTextFieldsState();
-}
-
-class _DynamicTextFieldsState extends State<DynamicTextFields> {
-  List<TextEditingController> _controllers = [];
-  List<Row> _textFieldRows = [];
-  List<String> _savedData = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _addNewTextFieldPair();
-  }
-
-  void _addNewTextFieldPair({String? text1, String? text2}) {
-    final controller1 = TextEditingController(text: text1);
-    final controller2 = TextEditingController(text: text2);
-
-    final textFieldRow = Row(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextFormField(
-              controller: controller1,
-              decoration: InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                suffixIcon: Text("Kgs").paddingSymmetric(vertical: 15),
-                enabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                disabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                focusedBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                border: OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                labelText: 'Enter text',
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextFormField(
-              controller: controller2,
-              decoration: InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                suffixIcon: Text("Kgs").paddingSymmetric(vertical: 15),
-                enabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                disabledBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                focusedBorder:  OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                border: OutlineInputBorder(borderSide: BorderSide(color: appColor(context).stroke)),
-                labelText: 'Enter text',
-              ),
-            ),
-          ),
-        ),
-        /*IconButton(
-          icon: ,
-          onPressed: () {
-
-          },
-        )*/
-        InkWell(
-          onTap: (){
-            _removeTextFieldPair(controller1, controller2);
-          },
-            child: Icon(Icons.remove_circle)),
-      ],
-    );
-
-    setState(() {
-      _controllers.addAll([controller1, controller2]);
-      _textFieldRows.add(textFieldRow);
+      );
     });
   }
-
-  void _removeTextFieldPair(TextEditingController controller1, TextEditingController controller2) {
-    setState(() {
-      int index = _controllers.indexOf(controller1);
-      if (index != -1) {
-        _controllers.removeAt(index);
-        _controllers.removeAt(index); // Remove both controllers (they are consecutive)
-        _textFieldRows.removeAt(index ~/ 2); // Each pair of controllers represents one row
-      }
-      controller1.dispose();
-      controller2.dispose();
-    });
-  }
-
-  @override
-  void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  void _saveData() {
-    _savedData.clear();
-    for (var controller in _controllers) {
-      _savedData.add(controller.text);
-    }
-    print('Saved Data: $_savedData');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Consumer<HomeProvider>(
-      builder: (context,home,child) {
-        return CupertinoPageScaffold(
-          backgroundColor: const Color(0xFFFFFFFF),
-          navigationBar: CupertinoNavigationBar(
-            backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
-            middle: Text(home.controller.text,
-                style: appCss.dmSansSemiBold18
-                    .textColor(appColor(context).darkText)),
-            leading:
-            Text(appFonts.cancel).inkWell(onTap: () => route.pop(context)),
-            trailing: Text(appFonts.save).inkWell(onTap: () =>_savedData),
-          ),
-          child: Stack(
-            children: [
-              ListView(
-                children: [
-                  const VSpace(Sizes.s80),
-                  Text(home.controller.text,style: appCss.dmSansMedium16.textColor(appColor(context).darkText),).padding(horizontal: Sizes.s20),
-                  const VSpace(Sizes.s2),
-                  Text("${home.newAddList.length} exercises ${_controllers.length} set",style: appCss.dmSansLight14.textColor(appColor(context).darkText),).padding(horizontal: Sizes.s20),
-
-                  ...home.newAddList.asMap().entries.map((e) => Container(
-                    margin: EdgeInsets.symmetric(horizontal: Sizes.s20),
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    decoration: ShapeDecoration(
-                        color: appColor(context).whiteColor,
-                        shadows: [
-                          const BoxShadow(
-                              color: Color(0xFFF5F5F5), blurRadius: 12)
-                        ],
-                        shape: SmoothRectangleBorder(
-                            borderRadius: SmoothBorderRadius(
-                                cornerRadius: 8, cornerSmoothing: 1))),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            e.value.headerImage != null
-                                ? Container(
-                              height: Sizes.s40,
-                              width: Sizes.s40,
-                              decoration: ShapeDecoration(
-                                  image: DecorationImage(
-                                      image: NetworkImage(
-                                          e.value.headerImage!)),
-                                  shape: SmoothRectangleBorder(
-                                      borderRadius: SmoothBorderRadius(
-                                          cornerRadius: 8,
-                                          cornerSmoothing: 1))),
-                            )
-                                : Container(
-                              height: Sizes.s40,
-                              width: Sizes.s40,
-                              alignment: Alignment.center,
-                              decoration: ShapeDecoration(
-                                  shape: SmoothRectangleBorder(
-                                      borderRadius: SmoothBorderRadius(
-                                          cornerRadius: 8,
-                                          cornerSmoothing: 1))),
-                              child: Text(e.value.name![0]),
-                            ),
-                            const HSpace(Sizes.s10),
-                            Text(e.value.name!)
-                          ],
-                        ).paddingSymmetric(horizontal: Sizes.s12),
-                        Divider(),
-                        ..._textFieldRows,
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: ElevatedButton(
-                            onPressed: _addNewTextFieldPair,
-                            child: Text('Add Text Field Pair'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ))
-                ],
-              ),
-
-
-            ],
-          ),
-        );
-      }
-    );
-  }
 }
-
